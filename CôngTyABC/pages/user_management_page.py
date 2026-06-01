@@ -1,0 +1,102 @@
+# pages/user_management_page.py
+
+from PyQt6.QtWidgets import (QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+                             QTableWidget, QTableWidgetItem, QDialog,
+                             QFormLayout, QLineEdit, QComboBox, QMessageBox, QHeaderView)
+from pages.base_page import BasePage
+from styles import APP_STYLE
+
+class UserManagementPage(BasePage):
+    def __init__(self, db, user):
+        super().__init__(db, user)
+        self.setStyleSheet(APP_STYLE)
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("QUẢN LÍ NGƯỜI DÙNG"))
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(["ID", "Username", "Họ tên", "Phòng", "Chức vụ", "Role"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table)
+
+        btn_layout = QHBoxLayout()
+        btn_edit = QPushButton("Sửa")
+        btn_delete = QPushButton("Xóa")
+        btn_view = QPushButton("Xem")
+        btn_layout.addWidget(btn_edit)
+        btn_layout.addWidget(btn_delete)
+        btn_layout.addWidget(btn_view)
+        layout.addLayout(btn_layout)
+
+        btn_edit.clicked.connect(self.edit_user)
+        btn_delete.clicked.connect(self.delete_user)
+        btn_view.clicked.connect(self.view_user)
+        self.load_data()
+
+    def load_data(self):
+        users = self.db.get_all_users()
+        self.table.setRowCount(len(users))
+        for row, u in enumerate(users):
+            self.table.setItem(row, 0, QTableWidgetItem(str(u['id'])))
+            self.table.setItem(row, 1, QTableWidgetItem(u['username']))
+            self.table.setItem(row, 2, QTableWidgetItem(u['full_name']))
+            self.table.setItem(row, 3, QTableWidgetItem(u['department']))
+            self.table.setItem(row, 4, QTableWidgetItem(u['position']))
+            self.table.setItem(row, 5, QTableWidgetItem(str(u['role'])))
+
+    def get_selected_user_id(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "Lỗi", "Chọn một người dùng.")
+            return None
+        return int(self.table.item(row, 0).text())
+
+    def edit_user(self):
+        uid = self.get_selected_user_id()
+        if uid is None: return
+        user = self.db.get_user(uid)
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Sửa người dùng")
+        layout = QFormLayout(dialog)
+        full_edit = QLineEdit(user['full_name'])
+        dept_edit = QLineEdit(user['department'])
+        pos_edit = QLineEdit(user['position'])
+        role_combo = QComboBox()
+        role_combo.addItems(["1: Nhân viên", "2: Trưởng bộ phân", "3: Cấp cao"])
+        role_combo.setCurrentText(str(user['role']))
+        layout.addRow("Họ tên:", full_edit)
+        layout.addRow("Phòng ban:", dept_edit)
+        layout.addRow("Chức vụ:", pos_edit)
+        layout.addRow("Quyền:", role_combo)
+        btn_save = QPushButton("Lưu")
+        btn_save.clicked.connect(lambda: self.save_edit(dialog, uid, full_edit.text(),
+                                                        dept_edit.text(), pos_edit.text(),
+                                                        int(role_combo.currentText())))
+        layout.addRow(btn_save)
+        dialog.exec()
+
+    def save_edit(self, dialog, uid, full, dept, pos, role):
+        self.db.update_user(uid, full, dept, pos, role)
+        dialog.accept()
+        self.load_data()
+
+    def delete_user(self):
+        uid = self.get_selected_user_id()
+        if uid is None: return
+        confirm = QMessageBox.question(self, "Xác nhận", "Xóa người dùng này?",
+                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if confirm == QMessageBox.StandardButton.Yes:
+            self.db.delete_user(uid)
+            self.load_data()
+            QMessageBox.information(self, "Đã xóa", "Người dùng đã được xóa.")
+
+    def view_user(self):
+        uid = self.get_selected_user_id()
+        if uid is None: return
+        user = self.db.get_user(uid)
+        info = (f"Tên đăng nhập: {user['username']}\n"
+                f"Họ tên: {user['full_name']}\n"
+                f"Phòng ban: {user['department']}\n"
+                f"Chức vụ: {user['position']}\n"
+                f"Quyền: {user['role']}")
+        QMessageBox.information(self, "Thông tin người dùng", info)
